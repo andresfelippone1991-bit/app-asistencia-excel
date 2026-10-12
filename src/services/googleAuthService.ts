@@ -64,7 +64,11 @@ class GoogleAuthService {
   }
 
   public getClientId(): string {
-    return localStorage.getItem(CLIENT_ID_STORAGE_KEY) || DEFAULT_CLIENT_ID;
+    const stored = localStorage.getItem(CLIENT_ID_STORAGE_KEY)?.trim();
+    if (stored && stored.endsWith('.apps.googleusercontent.com')) {
+      return stored;
+    }
+    return DEFAULT_CLIENT_ID;
   }
 
   public setClientId(clientId: string): void {
