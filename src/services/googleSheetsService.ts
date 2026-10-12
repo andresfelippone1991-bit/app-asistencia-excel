@@ -1,8 +1,10 @@
 import { ApiResponse, AttendanceStatus, Student } from '../types';
 import { extractSpreadsheetId } from '../utils/sheetParser';
+import { googleAuthService } from './googleAuthService';
+import { googleSheetsApiService } from './googleSheetsApiService';
 
 export interface SaveAttendancePayload {
-  appsScriptUrl: string;
+  appsScriptUrl?: string;
   spreadsheetId: string;
   sheetName: string;
   date: string;
@@ -13,20 +15,19 @@ export interface SaveAttendancePayload {
 }
 
 /**
- * Execute request to Google Apps Script Web App
+ * Execute request to Google Apps Script Web App (Fallback mode)
  */
 async function callAppsScript<T = any>(
   url: string,
   data: Record<string, any>
 ): Promise<ApiResponse<T>> {
   if (!url || !url.trim()) {
-    throw new Error('No se ha configurado la URL de Google Apps Script. Ve a Configuración para agregarla.');
+    throw new Error('No se ha configurado la URL de Google Apps Script ni se ha iniciado sesión con Google.');
   }
 
   const cleanUrl = url.trim();
 
   try {
-    // Send using text/plain to avoid CORS preflight OPTIONS rejection from Google Apps Script
     const response = await fetch(cleanUrl, {
       method: 'POST',
       headers: {
@@ -45,10 +46,9 @@ async function callAppsScript<T = any>(
     try {
       json = JSON.parse(text);
     } catch {
-      // If response is HTML (often happens when Google login is required or permissions are restricted)
       if (text.includes('accounts.google.com') || text.includes('Sign in')) {
         throw new Error(
-          'Google Apps Script requiere inicio de sesión. Al implementar la aplicación web, debes elegir: "¿Quién tiene acceso? -> Cualquiera (Anyone)".'
+          'Google Apps Script requiere inicio de sesión. Elige: "¿Quién tiene acceso? -> Cualquiera (Anyone)".'
         );
       }
       throw new Error(`Respuesta no válida del servidor: ${text.slice(0, 150)}...`);
@@ -62,7 +62,7 @@ async function callAppsScript<T = any>(
   } catch (error: any) {
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
       throw new Error(
-        'No se pudo conectar con Google Apps Script. Verifica que la URL sea correcta y que la implementación tenga acceso "Cualquiera".'
+        'No se pudo conectar con Google Apps Script. Verifica la URL o inicia sesión directamente con Google.'
       );
     }
     throw error;
@@ -77,7 +77,15 @@ export const googleSheetsService = {
     appsScriptUrl: string,
     spreadsheetIdOrUrl: string
   ): Promise<{ title: string; sheets: string[] }> {
+    const auth = googleAuthService.getState();
     const spreadsheetId = extractSpreadsheetId(spreadsheetIdOrUrl);
+
+    // If logged in with Google, use direct Google Sheets API v4!
+    if (auth.isAuthenticated && auth.accessToken) {
+      return googleSheetsApiService.getSpreadsheetInfo(spreadsheetId, auth.accessToken);
+    }
+
+    // Otherwise use Apps Script
     const res = await callAppsScript(appsScriptUrl, {
       action: 'test',
       spreadsheetId,
@@ -90,7 +98,7 @@ export const googleSheetsService = {
   },
 
   /**
-   * Fetch students from Column A (or configured column) of the sheet
+   * Fetch students from Column A of the sheet
    */
   async fetchStudents(
     appsScriptUrl: string,
@@ -99,7 +107,21 @@ export const googleSheetsService = {
     startRow: number = 4,
     nameColumn: string = 'A'
   ): Promise<Student[]> {
+    const auth = googleAuthService.getState();
     const spreadsheetId = extractSpreadsheetId(spreadsheetIdOrUrl);
+
+    // 1. Direct Google Sheets API v4 (Preferred: Instant, no Apps Script)
+    if (auth.isAuthenticated && auth.accessToken) {
+      return googleSheetsApiService.fetchStudents(
+        spreadsheetId,
+        sheetName,
+        startRow,
+        nameColumn,
+        auth.accessToken
+      );
+    }
+
+    // 2. Apps Script Fallback
     const res = await callAppsScript(appsScriptUrl, {
       action: 'getStudents',
       spreadsheetId,
@@ -121,15 +143,31 @@ export const googleSheetsService = {
   },
 
   /**
-   * Save date and attendance to the next available column (or overwrite existing date)
+   * Save date and attendance
    */
   async saveAttendance(payload: SaveAttendancePayload): Promise<{
     columnLetter: string;
     totalUpdated: number;
     message: string;
   }> {
+    const auth = googleAuthService.getState();
     const spreadsheetId = extractSpreadsheetId(payload.spreadsheetId);
-    const res = await callAppsScript(payload.appsScriptUrl, {
+
+    // 1. Direct Google Sheets API v4 (Instant, no Apps Script)
+    if (auth.isAuthenticated && auth.accessToken) {
+      return googleSheetsApiService.saveAttendance(
+        spreadsheetId,
+        payload.sheetName || 'Asistencia',
+        payload.date,
+        payload.dateRow || 3,
+        payload.startColumn || 'C',
+        payload.records,
+        auth.accessToken
+      );
+    }
+
+    // 2. Apps Script Fallback
+    const res = await callAppsScript(payload.appsScriptUrl || '', {
       action: 'saveAttendance',
       spreadsheetId,
       sheetName: payload.sheetName || 'Asistencia',
@@ -145,27 +183,5 @@ export const googleSheetsService = {
       totalUpdated: (res as any).totalUpdated || Object.keys(payload.records).length,
       message: res.message || 'Asistencia registrada con éxito',
     };
-  },
-
-  /**
-   * Get past recorded dates
-   */
-  async fetchHistory(
-    appsScriptUrl: string,
-    spreadsheetIdOrUrl: string,
-    sheetName: string = 'Asistencia',
-    dateRow: number = 3,
-    startColumn: string = 'C'
-  ): Promise<Array<{ date: string; column: number; columnLetter: string }>> {
-    const spreadsheetId = extractSpreadsheetId(spreadsheetIdOrUrl);
-    const res = await callAppsScript(appsScriptUrl, {
-      action: 'getHistory',
-      spreadsheetId,
-      sheetName,
-      dateRow,
-      startColumn,
-    });
-
-    return (res as any).dates || [];
   },
 };

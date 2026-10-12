@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Plus, BookOpen, Search, ArrowRight, ShieldAlert, GraduationCap } from 'lucide-react';
+import { Plus, BookOpen, Search, ArrowRight, ShieldAlert, GraduationCap, CheckCircle2 } from 'lucide-react';
 import type { Course, AppSettings } from './types';
 import { storageService } from './services/storageService';
 import { googleSheetsService } from './services/googleSheetsService';
+import { googleAuthService, GoogleAuthState } from './services/googleAuthService';
 import { Navbar } from './components/Navbar';
 import { CourseCard } from './components/CourseCard';
 import { CourseModal } from './components/CourseModal';
@@ -16,6 +17,7 @@ export function App() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [settings, setSettings] = useState<AppSettings>(storageService.getSettings());
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [authState, setAuthState] = useState<GoogleAuthState>(googleAuthService.getState());
 
   // Modals state
   const [isCourseModalOpen, setIsCourseModalOpen] = useState(false);
@@ -28,10 +30,14 @@ export function App() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [searchCourseQuery, setSearchCourseQuery] = useState('');
 
-  // Load courses on mount
+  // Load courses and auth subscription
   useEffect(() => {
     const loadedCourses = storageService.getCourses();
     setCourses(loadedCourses);
+
+    return googleAuthService.subscribe((state) => {
+      setAuthState(state);
+    });
   }, []);
 
   const showToast = (type: 'success' | 'error' | 'info', message: string, title?: string) => {
@@ -66,7 +72,6 @@ export function App() {
     setCourses(updatedCourses);
     storageService.saveCourses(updatedCourses);
 
-    // If currently taking attendance for this course, update reference
     if (selectedCourse?.id === updatedCourse.id) {
       setSelectedCourse(updatedCourse);
     }
@@ -83,13 +88,14 @@ export function App() {
 
   const handleSyncCourse = async (course: Course) => {
     const effectiveAppsScriptUrl = (course.appsScriptUrl || settings.globalAppsScriptUrl).trim();
+    const isGoogleConnected = authState.isAuthenticated;
 
-    if (!effectiveAppsScriptUrl) {
+    if (!effectiveAppsScriptUrl && !isGoogleConnected) {
       showToast(
         'error',
-        'Falta configurar la URL de Google Apps Script. Ve a Ajustes o a la Guía para agregarla.'
+        'Inicia sesión con Google o configura la URL de Apps Script en Ajustes.'
       );
-      setIsGuideModalOpen(true);
+      setIsSettingsModalOpen(true);
       return;
     }
 
@@ -141,6 +147,7 @@ export function App() {
   });
 
   const totalStudentsAllCourses = courses.reduce((acc, c) => acc + c.students.length, 0);
+  const isConnected = authState.isAuthenticated || Boolean(settings.globalAppsScriptUrl);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
@@ -149,13 +156,14 @@ export function App() {
 
       {/* Top Navbar */}
       <Navbar
-        isConfigured={Boolean(settings.globalAppsScriptUrl)}
+        isConfigured={isConnected}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         onOpenGuide={() => setIsGuideModalOpen(true)}
         onNewCourse={() => {
           setCourseToEdit(null);
           setIsCourseModalOpen(true);
         }}
+        onGoogleSignIn={() => setIsSettingsModalOpen(true)}
       />
 
       {/* Main Container */}
@@ -177,28 +185,27 @@ export function App() {
         ) : (
           /* Courses Dashboard */
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-            {/* Setup Alert Banner if Apps Script URL is missing */}
-            {!settings.globalAppsScriptUrl && (
-              <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-300/80 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in">
+            {/* Setup Alert Banner if neither Google OAuth nor Apps Script URL is set */}
+            {!isConnected && (
+              <div className="bg-gradient-to-r from-indigo-500/10 via-purple-500/5 to-transparent border border-indigo-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in">
                 <div className="flex items-start gap-3">
-                  <span className="p-2 bg-amber-100 text-amber-800 rounded-xl mt-0.5">
+                  <span className="p-2 bg-indigo-100 text-indigo-700 rounded-xl mt-0.5">
                     <ShieldAlert className="w-5 h-5" />
                   </span>
                   <div>
-                    <h3 className="font-bold text-amber-950 text-sm">
-                      Conecta tus Google Sheets en 3 minutos
+                    <h3 className="font-bold text-indigo-950 text-sm">
+                      Conecta tus Google Sheets con 1 Clic
                     </h3>
-                    <p className="text-xs text-amber-900/80 mt-0.5 leading-relaxed">
-                      Para que la app guarde las asistencias directamente en tus planillas de Google Drive, sigue nuestra guía rápida de Apps Script (es 100% gratuito y no requiere consola de Google Cloud).
+                    <p className="text-xs text-indigo-900/80 mt-0.5 leading-relaxed">
+                      Inicia sesión con tu cuenta de Google en Ajustes para conectar cualquier planilla directamente con solo pegar su URL o elegirla de Google Drive.
                     </p>
                   </div>
                 </div>
                 <button
-                  onClick={() => setIsGuideModalOpen(true)}
-                  className="self-start sm:self-center flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors shrink-0"
+                  onClick={() => setIsSettingsModalOpen(true)}
+                  className="self-start sm:self-center flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors shrink-0"
                 >
-                  <BookOpen className="w-4 h-4" />
-                  <span>Ver Guía Rápida</span>
+                  <span>Conectar en Ajustes</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>

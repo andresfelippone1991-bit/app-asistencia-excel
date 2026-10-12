@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { X, ExternalLink, RefreshCw, ChevronDown, ChevronUp, Users, Check, AlertCircle } from 'lucide-react';
+import { X, ExternalLink, RefreshCw, ChevronDown, ChevronUp, Users, Check, FolderOpen } from 'lucide-react';
 import { Course, Student } from '../types';
 import { extractSpreadsheetId, buildGoogleSheetUrl } from '../utils/sheetParser';
 import { googleSheetsService } from '../services/googleSheetsService';
+import { googleAuthService } from '../services/googleAuthService';
+import { googlePickerService } from '../services/googlePickerService';
 
 interface CourseModalProps {
   isOpen: boolean;
@@ -35,7 +37,6 @@ export const CourseModal: React.FC<CourseModalProps> = ({
   const [subject, setSubject] = useState(courseToEdit?.subject || '');
   const [spreadsheetUrl, setSpreadsheetUrl] = useState(courseToEdit?.spreadsheetUrl || '');
   const [sheetName, setSheetName] = useState(courseToEdit?.sheetName || 'Asistencia');
-  const [courseAppsScriptUrl, setCourseAppsScriptUrl] = useState(courseToEdit?.appsScriptUrl || '');
   const [startRow, setStartRow] = useState(courseToEdit?.startRow || 4);
   const [nameColumn, setNameColumn] = useState(courseToEdit?.nameColumn || 'A');
   const [dateRow, setDateRow] = useState(courseToEdit?.dateRow || 3);
@@ -50,18 +51,36 @@ export const CourseModal: React.FC<CourseModalProps> = ({
   if (!isOpen) return null;
 
   const currentSheetId = extractSpreadsheetId(spreadsheetUrl);
-  const effectiveAppsScriptUrl = (courseAppsScriptUrl || globalAppsScriptUrl).trim();
+  const isGoogleConnected = googleAuthService.getState().isAuthenticated;
 
-  const handleFetchStudentsFromSheet = async () => {
-    if (!currentSheetId) {
-      showToast('error', 'Ingresa primero el enlace o ID de la planilla de Google Sheet');
+  const handlePickFromDrive = () => {
+    const auth = googleAuthService.getState();
+    if (!auth.isAuthenticated || !auth.accessToken) {
+      showToast('info', 'Inicia sesión con Google primero para seleccionar directamente de Drive');
       return;
     }
-    if (!effectiveAppsScriptUrl) {
-      showToast(
-        'error',
-        'No has configurado la URL de Google Apps Script. Configúrala primero en Ajustes.'
-      );
+
+    googlePickerService.openPicker(
+      auth.accessToken,
+      (doc) => {
+        setSpreadsheetUrl(doc.url);
+        if (!name) {
+          setName(doc.name.replace(/\.[^/.]+$/, ''));
+        }
+        showToast('success', `Planilla seleccionada: "${doc.name}"`);
+        // Auto fetch students
+        triggerFetchStudents(doc.id);
+      },
+      (err) => {
+        showToast('error', `Error al abrir selector de Drive: ${err.message}`);
+      }
+    );
+  };
+
+  const triggerFetchStudents = async (sheetIdToUse?: string) => {
+    const id = sheetIdToUse || currentSheetId;
+    if (!id) {
+      showToast('error', 'Ingresa primero el enlace o ID de la planilla de Google Sheet');
       return;
     }
 
@@ -70,8 +89,8 @@ export const CourseModal: React.FC<CourseModalProps> = ({
 
     try {
       const fetched = await googleSheetsService.fetchStudents(
-        effectiveAppsScriptUrl,
-        currentSheetId,
+        globalAppsScriptUrl,
+        id,
         sheetName,
         startRow,
         nameColumn
@@ -79,7 +98,7 @@ export const CourseModal: React.FC<CourseModalProps> = ({
 
       if (fetched.length === 0) {
         showToast('info', 'No se encontraron alumnos en la fila/columna especificada');
-        setSyncStatus('Planilla leída, pero no se encontraron alumnos');
+        setSyncStatus('Planilla leída, pero no se encontraron alumnos en fila 4');
       } else {
         setStudents(fetched);
         showToast('success', `¡Se cargaron ${fetched.length} alumnos desde Google Sheets!`);
@@ -109,7 +128,6 @@ export const CourseModal: React.FC<CourseModalProps> = ({
       spreadsheetUrl: spreadsheetUrl.trim(),
       spreadsheetId: currentSheetId,
       sheetName: sheetName.trim() || 'Asistencia',
-      appsScriptUrl: courseAppsScriptUrl.trim() || undefined,
       startRow,
       nameColumn: nameColumn.toUpperCase().trim() || 'A',
       dateRow,
@@ -188,37 +206,49 @@ export const CourseModal: React.FC<CourseModalProps> = ({
                 type="text"
                 value={institution}
                 onChange={(e) => setInstitution(e.target.value)}
-                placeholder="Ej: E.E.S.T. N° 1 / Escuela Normal"
+                placeholder="Ej: E.E.S.T. N° 1 / Colegio Normal"
                 className="w-full px-3.5 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-hidden"
               />
             </div>
 
-            {/* Google Sheets Link */}
+            {/* Google Sheets Link & Picker */}
             <div className="space-y-1.5 pt-2 border-t border-slate-100">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-semibold text-slate-700">
-                  Enlace o ID de la Planilla Google Sheet *
+                  Planilla de Google Sheets *
                 </label>
-                {currentSheetId && (
-                  <a
-                    href={buildGoogleSheetUrl(currentSheetId)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1 font-medium"
-                  >
-                    Abrir Hoja <ExternalLink className="w-3 h-3" />
-                  </a>
-                )}
+                <div className="flex items-center gap-2">
+                  {isGoogleConnected && (
+                    <button
+                      type="button"
+                      onClick={handlePickFromDrive}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1 font-semibold bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg transition-colors"
+                    >
+                      <FolderOpen className="w-3.5 h-3.5" />
+                      Elegir de Drive
+                    </button>
+                  )}
+                  {currentSheetId && (
+                    <a
+                      href={buildGoogleSheetUrl(currentSheetId)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1 font-medium"
+                    >
+                      Abrir <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
               </div>
               <input
                 type="text"
                 value={spreadsheetUrl}
                 onChange={(e) => setSpreadsheetUrl(e.target.value)}
-                placeholder="https://docs.google.com/spreadsheets/d/1BxiMVs.../edit"
+                placeholder="Pega el enlace https://docs.google.com/spreadsheets/d/.../edit"
                 className="w-full px-3.5 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-hidden font-mono"
               />
               <p className="text-[11px] text-slate-500">
-                Pega la URL completa de tu Google Sheet. Cada curso puede tener su propia planilla.
+                Pega directamente la URL de la planilla desde tu navegador. Cada curso puede tener su propia planilla.
               </p>
             </div>
 
@@ -226,7 +256,7 @@ export const CourseModal: React.FC<CourseModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Nombre de la Pestaña en la Hoja
+                  Nombre de la Pestaña
                 </label>
                 <input
                   type="text"
@@ -273,7 +303,7 @@ export const CourseModal: React.FC<CourseModalProps> = ({
                 </div>
                 <button
                   type="button"
-                  onClick={handleFetchStudentsFromSheet}
+                  onClick={() => triggerFetchStudents()}
                   disabled={isLoadingStudents || !currentSheetId}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
                 >
@@ -314,7 +344,7 @@ export const CourseModal: React.FC<CourseModalProps> = ({
                 onClick={() => setShowAdvanced(!showAdvanced)}
                 className="flex items-center justify-between w-full text-xs font-semibold text-slate-600 hover:text-slate-900 py-1"
               >
-                <span>Configuración Avanzada de Celdas (Filas y Columnas)</span>
+                <span>Configuración de Celdas (Filas y Columnas)</span>
                 {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
 
