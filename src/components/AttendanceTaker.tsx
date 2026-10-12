@@ -6,6 +6,7 @@ import { StudentRow } from './StudentRow';
 import { AttendanceStats } from './AttendanceStats';
 import { getTodayInputFormat, formatAttendanceDate, getFriendlyDateLabel } from '../utils/dateFormatter';
 import { buildGoogleSheetUrl } from '../utils/sheetParser';
+import { getCuatrimestreFromDate } from '../utils/cuatrimestreUtils';
 import { googleSheetsService } from '../services/googleSheetsService';
 import type { SaveAttendanceResult } from '../services/googleSheetsService';
 
@@ -42,8 +43,9 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
 
   const effectiveAppsScriptUrl = (course.appsScriptUrl || globalAppsScriptUrl).trim();
   const formattedDate = formatAttendanceDate(selectedDate, dateFormat);
+  const activeCuatrimestre = getCuatrimestreFromDate(selectedDate);
+  const targetDateRowPreview = activeCuatrimestre === 1 ? course.dateRow || 3 : 38;
 
-  // Initialize attendance state on load or when course changes
   useEffect(() => {
     const existingRecord = course.history?.find((h) => h.date === formattedDate);
 
@@ -148,7 +150,7 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
         records: attendance,
         notes: notes,
         syncedToGoogleSheets: res.mode !== 'direct_clipboard',
-        columnUsed: res.columnLetter,
+        columnUsed: `${res.columnLetter}${res.dateRowUsed}`,
       };
 
       if (existingIndex >= 0) {
@@ -166,15 +168,16 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
       onAttendanceSaved(updatedCourse);
       setSaveResult(res);
 
+      const cuatrName = res.cuatrimestre === 1 ? '1° Cuatrimestre' : '2° Cuatrimestre';
       if (res.mode === 'direct_clipboard') {
         showToast(
           'success',
-          `¡Columna del día ${formattedDate} copiada! Abre tu planilla y presiona Ctrl+V en ${res.columnLetter}${course.dateRow || 3}`
+          `¡Columna (${cuatrName}) copiada! Abre tu planilla y pega en ${res.columnLetter}${res.dateRowUsed}`
         );
       } else {
         showToast(
           'success',
-          `Asistencia del día ${formattedDate} guardada automáticamente en columna ${res.columnLetter}`
+          `Guardado en ${cuatrName} (Celda fecha: ${res.columnLetter}${res.dateRowUsed})`
         );
       }
     } catch (err: any) {
@@ -243,7 +246,6 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
             </div>
           </div>
 
-          {/* Quick sync students button */}
           <button
             onClick={async () => {
               setIsSyncing(true);
@@ -259,7 +261,7 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
           </button>
         </div>
 
-        {/* Date Selector Banner */}
+        {/* Date Selector & Automatic Cuatrimestre Detector Banner */}
         <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
@@ -269,7 +271,7 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
               <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
                 Fecha de Asistencia ({getFriendlyDateLabel(selectedDate)})
               </span>
-              <div className="flex items-center gap-2 mt-0.5">
+              <div className="flex flex-wrap items-center gap-2 mt-0.5">
                 <input
                   type="date"
                   value={selectedDate}
@@ -277,7 +279,18 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
                   className="px-2.5 py-1 text-xs font-semibold text-slate-800 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-hidden bg-white"
                 />
                 <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
-                  En planilla: {formattedDate}
+                  Fecha: {formattedDate}
+                </span>
+                <span
+                  className={`text-xs font-bold px-2.5 py-0.5 rounded-md border ${
+                    activeCuatrimestre === 1
+                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                      : 'bg-purple-50 text-purple-700 border-purple-200'
+                  }`}
+                >
+                  {activeCuatrimestre === 1
+                    ? '1° Cuatrimestre (Mes 03-07)'
+                    : '2° Cuatrimestre (Mes 08-12)'}
                 </span>
               </div>
             </div>
@@ -309,20 +322,33 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
               <div className="text-xs">
                 <p className="font-bold text-sm text-emerald-900">
                   {saveResult.mode === 'direct_clipboard'
-                    ? `¡Columna del día ${formattedDate} lista y copiada al portapapeles!`
-                    : `¡Guardado automático exitoso en columna ${saveResult.columnLetter}!`}
+                    ? `¡Columna del ${
+                        saveResult.cuatrimestre === 1 ? '1° Cuatrimestre' : '2° Cuatrimestre'
+                      } (${formattedDate}) copiada!`
+                    : `¡Guardado automático en ${
+                        saveResult.cuatrimestre === 1 ? '1° Cuatrimestre' : '2° Cuatrimestre'
+                      } (Celda ${saveResult.columnLetter}${saveResult.dateRowUsed})!`}
                 </p>
                 {saveResult.mode === 'direct_clipboard' ? (
                   <p className="text-emerald-800 mt-1 leading-relaxed">
                     Haz clic en <strong>"Abrir Planilla"</strong>, selecciona la celda{' '}
                     <code className="bg-emerald-100 px-1.5 py-0.5 rounded font-bold">
-                      {saveResult.columnLetter}{course.dateRow || 3}
+                      {saveResult.columnLetter}{saveResult.dateRowUsed}
                     </code>{' '}
-                    (donde dice <em>"Fecha"</em>) y presiona <strong>Ctrl + V</strong> (Pegar). Se completarán la fecha y los {course.students.length} alumnos en 1 segundo.
+                    (donde dice <em>"Fecha"</em> en el {saveResult.cuatrimestre}° Cuatrimestre) y presiona{' '}
+                    <strong>Ctrl + V</strong>.
                   </p>
                 ) : (
                   <p className="text-emerald-800 mt-0.5">
-                    La fecha y las asistencias ya fueron escritas directamente en tu hoja de Google Sheets.
+                    La fecha ({formattedDate}) se escribió en la celda{' '}
+                    <strong>
+                      {saveResult.columnLetter}{saveResult.dateRowUsed}
+                    </strong>{' '}
+                    y las asistencias en las filas del{' '}
+                    <strong>
+                      {saveResult.cuatrimestre === 1 ? 'Primer Cuatrimestre' : 'Segundo Cuatrimestre'}
+                    </strong>
+                    .
                   </p>
                 )}
               </div>
@@ -339,7 +365,7 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
               >
                 <span>
                   {saveResult.mode === 'direct_clipboard'
-                    ? `Abrir Planilla y Pegar en ${saveResult.columnLetter}${course.dateRow || 3}`
+                    ? `Abrir Planilla y Pegar en ${saveResult.columnLetter}${saveResult.dateRowUsed}`
                     : 'Ver Planilla en Google Sheets'}
                 </span>
                 <ExternalLink className="w-3.5 h-3.5" />
@@ -419,7 +445,8 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
               {presentCount} presentes &bull; {absentCount} ausentes &bull; {lateCount} tardes
             </p>
             <p className="text-[11px] text-slate-500">
-              Fecha a registrar: <strong>{formattedDate}</strong> (Fila 3, {course.sheetName})
+              Destino: <strong>{activeCuatrimestre}° Cuatrimestre</strong> &bull; Fecha{' '}
+              <strong>{formattedDate}</strong> (Fila {targetDateRowPreview}, {course.sheetName})
             </p>
           </div>
 
@@ -431,12 +458,12 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
             {isSaving ? (
               <>
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>Procesando Asistencia...</span>
+                <span>Guardando en {activeCuatrimestre}° Cuatrimestre...</span>
               </>
             ) : (
               <>
                 <Send className="w-4 h-4" />
-                <span>Guardar Asistencia en Google Sheets</span>
+                <span>Guardar en {activeCuatrimestre}° Cuatrimestre ({formattedDate})</span>
               </>
             )}
           </button>

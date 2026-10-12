@@ -1,5 +1,10 @@
 import type { ApiResponse, AttendanceStatus, Student } from '../types';
 import { extractSpreadsheetId } from '../utils/sheetParser';
+import {
+  getCuatrimestreFromDate,
+  isExcludedStudentRow,
+  isSecondCuatrimestreStart,
+} from '../utils/cuatrimestreUtils';
 import { googleAuthService } from './googleAuthService';
 import { googleSheetsApiService } from './googleSheetsApiService';
 import { directSheetReaderService } from './directSheetReaderService';
@@ -19,6 +24,8 @@ export interface SaveAttendancePayload {
 export interface SaveAttendanceResult {
   mode: 'cloud_oauth' | 'cloud_script' | 'direct_clipboard';
   columnLetter: string;
+  dateRowUsed: number;
+  cuatrimestre: 1 | 2;
   totalUpdated: number;
   message: string;
   clipboardText?: string;
@@ -117,7 +124,6 @@ export const googleSheetsService = {
       };
     }
 
-    // Direct URL check
     const directRes = await directSheetReaderService.fetchStudentsByUrl(spreadsheetId, 'Asistencia');
     return {
       title: `Planilla (${directRes.students.length} alumnos detectados)`,
@@ -127,7 +133,7 @@ export const googleSheetsService = {
 
   /**
    * Fetch students from Column A of the sheet.
-   * Works automatically via Direct URL Reader if neither OAuth nor Apps Script is configured!
+   * Excludes Row 1, Row 36, and headers like "Alumnos".
    */
   async fetchStudents(
     appsScriptUrl: string,
@@ -166,19 +172,28 @@ export const googleSheetsService = {
         });
 
         if (res.students && Array.isArray(res.students)) {
-          return res.students.map((s, index) => ({
-            id: `row_${s.row || startRow + index}`,
-            row: s.row || startRow + index,
-            name: s.name,
-            active: true,
-          }));
+          const filtered: Student[] = [];
+          for (let i = 0; i < res.students.length; i++) {
+            const s = res.students[i];
+            const rowNum = s.row || startRow + i;
+            if (isSecondCuatrimestreStart(s.name, rowNum)) break;
+            if (!isExcludedStudentRow(s.name, rowNum)) {
+              filtered.push({
+                id: `row_${rowNum}`,
+                row: rowNum,
+                name: s.name,
+                active: true,
+              });
+            }
+          }
+          return filtered;
         }
       } catch (e) {
         console.warn('Apps Script fetch failed, trying direct URL reader...', e);
       }
     }
 
-    // 3. ZERO-CONFIG Direct URL Reader (No Client ID, No Apps Script needed!)
+    // 3. ZERO-CONFIG Direct URL Reader
     const directResult = await directSheetReaderService.fetchStudentsByUrl(
       spreadsheetId,
       sheetName,
@@ -190,11 +205,12 @@ export const googleSheetsService = {
 
   /**
    * Save date and attendance.
-   * Uses Cloud API if connected, or falls back to Smart 1-Click Column Copy so the user is never blocked!
+   * Automatically routes Months 03-07 to Primer Cuatrimestre and Months 08-12 to Segundo Cuatrimestre.
    */
   async saveAttendance(payload: SaveAttendancePayload): Promise<SaveAttendanceResult> {
     const auth = googleAuthService.getState();
     const spreadsheetId = extractSpreadsheetId(payload.spreadsheetId);
+    const cuatrimestre = getCuatrimestreFromDate(payload.date);
 
     // 1. Direct Google Sheets API v4 (OAuth)
     if (auth.isAuthenticated && auth.accessToken) {
@@ -205,7 +221,8 @@ export const googleSheetsService = {
         payload.dateRow || 3,
         payload.startColumn || 'C',
         payload.records,
-        auth.accessToken
+        auth.accessToken,
+        payload.students
       );
       return {
         mode: 'cloud_oauth',
@@ -215,50 +232,66 @@ export const googleSheetsService = {
 
     // 2. Apps Script Webhook (If configured)
     if (payload.appsScriptUrl && payload.appsScriptUrl.trim()) {
+      const effectiveDateRow = cuatrimestre === 1 ? payload.dateRow || 3 : 38;
+      const mappedRecords: Record<string, AttendanceStatus> = {};
+
+      for (const key in payload.records) {
+        const origRow = parseInt(key.replace('row_', ''), 10);
+        if (!isNaN(origRow)) {
+          const targetRow = cuatrimestre === 1 ? origRow : origRow + 35;
+          if (targetRow !== 1 && targetRow !== 36) {
+            mappedRecords[targetRow.toString()] = payload.records[key];
+          }
+        }
+      }
+
       const res = await callAppsScript(payload.appsScriptUrl, {
         action: 'saveAttendance',
         spreadsheetId,
         sheetName: payload.sheetName || 'Asistencia',
         date: payload.date,
-        dateRow: payload.dateRow || 3,
+        dateRow: effectiveDateRow,
         startColumn: payload.startColumn || 'C',
-        records: payload.records,
+        records: mappedRecords,
         overwrite: payload.overwrite ?? true,
       });
 
       return {
         mode: 'cloud_script',
         columnLetter: res.columnLetter || 'C',
-        totalUpdated: (res as any).totalUpdated || Object.keys(payload.records).length,
+        dateRowUsed: effectiveDateRow,
+        cuatrimestre,
+        totalUpdated: (res as any).totalUpdated || Object.keys(mappedRecords).length,
         message: res.message || 'Asistencia registrada en la nube con éxito',
       };
     }
 
     // 3. ZERO-CONFIG Smart Clipboard Column Mode
-    // Detects next available column in the sheet if possible, builds exact vertical column (Date + P/A/T/J)
     let targetColLetter = payload.startColumn || 'C';
+    let dateRowUsed = cuatrimestre === 1 ? payload.dateRow || 3 : 38;
     try {
       const directInfo = await directSheetReaderService.fetchStudentsByUrl(
         spreadsheetId,
         payload.sheetName || 'Asistencia',
         4,
-        'A'
+        'A',
+        cuatrimestre
       );
       targetColLetter = colIndexToLetter(directInfo.nextAvailableColIndex);
+      dateRowUsed = directInfo.dateRowUsed;
     } catch {
-      // keep default C
+      // keep defaults
     }
 
-    // Sort rows from startRow (e.g. 4) to maxRow
     const rowNumbers = Object.keys(payload.records)
       .map((k) => parseInt(k.replace('row_', ''), 10))
-      .filter((n) => !isNaN(n))
+      .filter((n) => !isNaN(n) && n !== 1 && n !== 36)
       .sort((a, b) => a - b);
 
     const minRow = rowNumbers.length > 0 ? Math.min(...rowNumbers) : 4;
     const maxRow = rowNumbers.length > 0 ? Math.max(...rowNumbers) : 4;
 
-    const lines: string[] = [payload.date]; // First cell is Date (Row 3)
+    const lines: string[] = [payload.date];
     for (let r = minRow; r <= maxRow; r++) {
       lines.push(payload.records[r.toString()] || payload.records[`row_${r}`] || '');
     }
@@ -270,12 +303,16 @@ export const googleSheetsService = {
       // ignore if clipboard permission denied
     }
 
+    const cuatrLabel = cuatrimestre === 1 ? '1° Cuatrimestre' : '2° Cuatrimestre';
+
     return {
       mode: 'direct_clipboard',
       columnLetter: targetColLetter,
+      dateRowUsed,
+      cuatrimestre,
       totalUpdated: rowNumbers.length,
       clipboardText,
-      message: `Asistencia guardada y columna copiada lista para pegar en la celda ${targetColLetter}${payload.dateRow || 3}`,
+      message: `Asistencia (${cuatrLabel}) lista para pegar en celda ${targetColLetter}${dateRowUsed}`,
     };
   },
 };

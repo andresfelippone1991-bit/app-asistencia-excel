@@ -13,6 +13,8 @@ import { AttendanceTaker } from './components/AttendanceTaker';
 import { Toast } from './components/Toast';
 import type { ToastMessage } from './components/Toast';
 
+import { isExcludedStudentRow, isSecondCuatrimestreStart } from './utils/cuatrimestreUtils';
+
 export function App() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [settings, setSettings] = useState<AppSettings>(storageService.getSettings());
@@ -32,8 +34,15 @@ export function App() {
 
   // Load courses and auth subscription
   useEffect(() => {
-    const loadedCourses = storageService.getCourses();
-    setCourses(loadedCourses);
+    const rawCourses = storageService.getCourses();
+    const cleanedCourses = rawCourses.map((c) => ({
+      ...c,
+      students: (c.students || []).filter(
+        (s) => !isExcludedStudentRow(s.name, s.row) && !isSecondCuatrimestreStart(s.name, s.row)
+      ),
+    }));
+    setCourses(cleanedCourses);
+    storageService.saveCourses(cleanedCourses);
 
     return googleAuthService.subscribe((state) => {
       setAuthState(state);
