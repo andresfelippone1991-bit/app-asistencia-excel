@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { MessageSquare, Check, X, Clock, FileText } from 'lucide-react';
-import { AttendanceStatus, Student } from '../types';
+import { MessageSquare, X } from 'lucide-react';
+import type { AttendanceStatus, Student } from '../types';
 
 interface StudentRowProps {
   index: number;
@@ -10,6 +10,48 @@ interface StudentRowProps {
   onStatusChange: (status: AttendanceStatus) => void;
   onNoteChange: (note: string) => void;
 }
+
+const CYCLE_ORDER: Record<string, AttendanceStatus> = {
+  P: 'A',
+  A: 'T',
+  T: 'J',
+  J: 'P',
+  '': 'P',
+};
+
+const STATUS_CONFIG: Record<
+  'P' | 'A' | 'T' | 'J',
+  {
+    label: string;
+    rowBg: string;
+    btnClass: string;
+  }
+> = {
+  P: {
+    label: 'Presente',
+    rowBg: 'bg-emerald-50/30 border-emerald-200/70',
+    btnClass:
+      'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-200 ring-2 ring-emerald-600/20',
+  },
+  A: {
+    label: 'Ausente',
+    rowBg: 'bg-rose-50/40 border-rose-200/80',
+    btnClass:
+      'bg-rose-600 hover:bg-rose-700 text-white shadow-sm shadow-rose-200 ring-2 ring-rose-600/20',
+  },
+  T: {
+    label: 'Tarde',
+    rowBg: 'bg-amber-50/40 border-amber-200/80',
+    btnClass:
+      'bg-amber-500 hover:bg-amber-600 text-white shadow-sm shadow-amber-200 ring-2 ring-amber-500/20',
+  },
+  J: {
+    label: 'Justificada',
+    rowBg: 'bg-blue-50/40 border-blue-200/80',
+    btnClass:
+      'bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-200 ring-2 ring-blue-600/20',
+  },
+};
 
 export const StudentRow: React.FC<StudentRowProps> = ({
   index,
@@ -21,19 +63,19 @@ export const StudentRow: React.FC<StudentRowProps> = ({
 }) => {
   const [showNoteInput, setShowNoteInput] = useState(Boolean(note));
 
+  const currentStatus: 'P' | 'A' | 'T' | 'J' =
+    status === 'A' || status === 'T' || status === 'J' ? status : 'P';
+
+  const config = STATUS_CONFIG[currentStatus];
+
+  const handleCycleStatus = () => {
+    const nextStatus = CYCLE_ORDER[currentStatus] || 'P';
+    onStatusChange(nextStatus);
+  };
+
   return (
     <div
-      className={`p-3 sm:px-4 sm:py-3 rounded-xl border transition-all duration-150 flex flex-col gap-2 ${
-        status === 'A'
-          ? 'bg-rose-50/40 border-rose-200/80'
-          : status === 'P'
-          ? 'bg-emerald-50/30 border-emerald-200/60'
-          : status === 'T'
-          ? 'bg-amber-50/40 border-amber-200/80'
-          : status === 'J'
-          ? 'bg-blue-50/40 border-blue-200/80'
-          : 'bg-white border-slate-200/70 hover:border-slate-300'
-      }`}
+      className={`p-3 sm:px-4 sm:py-3 rounded-xl border transition-all duration-150 flex flex-col gap-2 ${config.rowBg}`}
     >
       <div className="flex items-center justify-between gap-3">
         {/* Student Name & Index */}
@@ -51,62 +93,18 @@ export const StudentRow: React.FC<StudentRowProps> = ({
           </div>
         </div>
 
-        {/* Action status toggle buttons */}
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-          {/* P - Presente */}
+        {/* Single cycling attendance button (P -> A -> T -> J) */}
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
-            onClick={() => onStatusChange(status === 'P' ? '' : 'P')}
-            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center transition-all ${
-              status === 'P'
-                ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-200 scale-105 ring-2 ring-emerald-600/30'
-                : 'bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700'
-            }`}
-            title="Presente (P)"
+            onClick={handleCycleStatus}
+            className={`min-w-[110px] sm:min-w-[125px] h-10 px-3.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-between gap-2 transition-all active:scale-95 select-none cursor-pointer ${config.btnClass}`}
+            title="Toca para cambiar entre P (Presente), A (Ausente), T (Tarde) y J (Justificada)"
           >
-            P
-          </button>
-
-          {/* A - Ausente */}
-          <button
-            type="button"
-            onClick={() => onStatusChange(status === 'A' ? '' : 'A')}
-            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center transition-all ${
-              status === 'A'
-                ? 'bg-rose-600 text-white shadow-sm shadow-rose-200 scale-105 ring-2 ring-rose-600/30'
-                : 'bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700'
-            }`}
-            title="Ausente (A)"
-          >
-            A
-          </button>
-
-          {/* T - Tarde */}
-          <button
-            type="button"
-            onClick={() => onStatusChange(status === 'T' ? '' : 'T')}
-            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center transition-all ${
-              status === 'T'
-                ? 'bg-amber-500 text-white shadow-sm shadow-amber-200 scale-105 ring-2 ring-amber-500/30'
-                : 'bg-slate-100 hover:bg-amber-50 text-slate-600 hover:text-amber-700'
-            }`}
-            title="Tarde (T)"
-          >
-            T
-          </button>
-
-          {/* J - Justificada */}
-          <button
-            type="button"
-            onClick={() => onStatusChange(status === 'J' ? '' : 'J')}
-            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center transition-all ${
-              status === 'J'
-                ? 'bg-blue-600 text-white shadow-sm shadow-blue-200 scale-105 ring-2 ring-blue-600/30'
-                : 'bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-700'
-            }`}
-            title="Justificada (J)"
-          >
-            J
+            <span className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center text-sm font-black">
+              {currentStatus}
+            </span>
+            <span className="flex-1 text-center tracking-wide">{config.label}</span>
           </button>
 
           {/* Optional Note toggle button */}

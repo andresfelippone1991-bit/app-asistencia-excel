@@ -55,7 +55,7 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
     } else {
       const initial: Record<string, AttendanceStatus> = {};
       course.students.forEach((s) => {
-        initial[s.id] = autoMarkAllPresent ? 'P' : '';
+        initial[s.id] = 'P';
       });
       setAttendance(initial);
       setNotes({});
@@ -83,16 +83,16 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
       updated[s.id] = 'P';
     });
     setAttendance(updated);
-    showToast('info', 'Todos los alumnos marcados como Presentes');
+    showToast('info', 'Todos los alumnos marcados como Presentes (P)');
   };
 
   const handleClearAll = () => {
     const updated: Record<string, AttendanceStatus> = {};
     course.students.forEach((s) => {
-      updated[s.id] = '';
+      updated[s.id] = 'P';
     });
     setAttendance(updated);
-    showToast('info', 'Marcas de asistencia reiniciadas');
+    showToast('info', 'Asistencia reiniciada a Presente (P)');
   };
 
   const handleQuickDateChange = (daysAgo: number) => {
@@ -116,7 +116,7 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
     try {
       const recordsByRow: Record<string, AttendanceStatus> = {};
       course.students.forEach((s) => {
-        const val = attendance[s.id] || '';
+        const val = attendance[s.id] || 'P';
         recordsByRow[s.row.toString()] = val;
       });
 
@@ -192,7 +192,8 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
     if (!matchesSearch) return false;
 
     if (statusFilter === 'all') return true;
-    return attendance[st.id] === statusFilter;
+    const currentSt = attendance[st.id] || 'P';
+    return currentSt === statusFilter;
   });
 
   let presentCount = 0;
@@ -202,12 +203,11 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
   let unmarkedCount = 0;
 
   course.students.forEach((s) => {
-    const st = attendance[s.id];
+    const st = attendance[s.id] || 'P';
     if (st === 'P') presentCount++;
     else if (st === 'A') absentCount++;
     else if (st === 'T') lateCount++;
     else if (st === 'J') justifiedCount++;
-    else unmarkedCount++;
   });
 
   return (
