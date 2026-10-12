@@ -148,6 +148,21 @@ export function App() {
   const totalStudentsAllCourses = courses.reduce((acc, c) => acc + c.students.length, 0);
   const isConnected = authState.isAuthenticated || Boolean(settings.globalAppsScriptUrl);
 
+  const isDarkMode = settings.theme === 'dark';
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark-mode');
+    } else {
+      document.documentElement.classList.remove('dark-mode');
+    }
+  }, [isDarkMode]);
+
+  const handleToggleTheme = () => {
+    const nextTheme = isDarkMode ? 'light' : 'dark';
+    handleSaveSettings({ ...settings, theme: nextTheme });
+  };
+
   const handleDirectGoogleSignIn = async () => {
     try {
       await googleAuthService.signIn();
@@ -159,13 +174,15 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 transition-colors duration-200">
       {/* Toast Notifications */}
       <Toast toasts={toasts} onDismiss={handleDismissToast} />
 
       {/* Top Navbar */}
       <Navbar
         isConfigured={isConnected}
+        isDarkMode={isDarkMode}
+        onToggleTheme={handleToggleTheme}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         onOpenGuide={() => setIsGuideModalOpen(true)}
         onNewCourse={() => {

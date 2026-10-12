@@ -2,9 +2,151 @@
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-800 antialiased min-h-screen selection:bg-indigo-100 selection:text-indigo-900;
+    @apply bg-slate-50 text-slate-800 antialiased min-h-screen selection:bg-indigo-100 selection:text-indigo-900 transition-colors duration-200;
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   }
+}
+
+/* =========================================================
+   DARK MODE THEME OVERRIDES
+   ========================================================= */
+html.dark-mode,
+html.dark-mode body {
+  background-color: #0f172a !important;
+  color: #f1f5f9 !important;
+  color-scheme: dark;
+}
+
+html.dark-mode .bg-slate-50 {
+  background-color: #0f172a !important;
+}
+
+html.dark-mode .bg-white,
+html.dark-mode .bg-white\/95,
+html.dark-mode .bg-white\/80 {
+  background-color: #1e293b !important;
+}
+
+html.dark-mode .bg-slate-50\/50,
+html.dark-mode .bg-slate-50\/70 {
+  background-color: #172033 !important;
+}
+
+html.dark-mode .bg-slate-100 {
+  background-color: #334155 !important;
+}
+
+html.dark-mode .hover\:bg-slate-100:hover,
+html.dark-mode .hover\:bg-slate-200:hover,
+html.dark-mode .hover\:bg-slate-50:hover {
+  background-color: #475569 !important;
+}
+
+/* Text colors in Dark Mode */
+html.dark-mode .text-slate-900,
+html.dark-mode .text-slate-800 {
+  color: #f8fafc !important;
+}
+
+html.dark-mode .text-slate-700,
+html.dark-mode .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+html.dark-mode .text-slate-500,
+html.dark-mode .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+/* Borders in Dark Mode */
+html.dark-mode .border-slate-200,
+html.dark-mode .border-slate-200\/80,
+html.dark-mode .border-slate-200\/70,
+html.dark-mode .border-slate-100,
+html.dark-mode .border-slate-300 {
+  border-color: #334155 !important;
+}
+
+/* Form inputs & selects in Dark Mode */
+html.dark-mode input,
+html.dark-mode select {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+  color-scheme: dark;
+}
+
+/* Status Tints in Dark Mode */
+html.dark-mode .bg-emerald-50,
+html.dark-mode .bg-emerald-50\/30,
+html.dark-mode .bg-emerald-50\/70 {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+html.dark-mode .bg-rose-50,
+html.dark-mode .bg-rose-50\/40,
+html.dark-mode .bg-rose-50\/70 {
+  background-color: rgba(244, 63, 94, 0.14) !important;
+  border-color: rgba(244, 63, 94, 0.35) !important;
+}
+
+html.dark-mode .bg-amber-50,
+html.dark-mode .bg-amber-50\/40,
+html.dark-mode .bg-amber-50\/70 {
+  background-color: rgba(245, 158, 11, 0.14) !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+html.dark-mode .bg-blue-50,
+html.dark-mode .bg-blue-50\/40,
+html.dark-mode .bg-blue-50\/70 {
+  background-color: rgba(59, 130, 246, 0.14) !important;
+  border-color: rgba(59, 130, 246, 0.35) !important;
+}
+
+html.dark-mode .bg-indigo-50,
+html.dark-mode .bg-indigo-50\/70 {
+  background-color: rgba(99, 102, 241, 0.16) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+}
+
+html.dark-mode .bg-purple-50 {
+  background-color: rgba(168, 85, 247, 0.16) !important;
+  border-color: rgba(168, 85, 247, 0.35) !important;
+}
+
+html.dark-mode .text-emerald-950,
+html.dark-mode .text-emerald-900,
+html.dark-mode .text-emerald-800,
+html.dark-mode .text-emerald-700 {
+  color: #6ee7b7 !important;
+}
+
+html.dark-mode .text-rose-800,
+html.dark-mode .text-rose-700 {
+  color: #fda4af !important;
+}
+
+html.dark-mode .text-amber-800,
+html.dark-mode .text-amber-700 {
+  color: #fcd34d !important;
+}
+
+html.dark-mode .text-blue-800,
+html.dark-mode .text-blue-700 {
+  color: #93c5fd !important;
+}
+
+html.dark-mode .text-indigo-950,
+html.dark-mode .text-indigo-900,
+html.dark-mode .text-indigo-700,
+html.dark-mode .text-indigo-600 {
+  color: #a5b4fc !important;
+}
+
+html.dark-mode .text-purple-700 {
+  color: #d8b4fe !important;
 }
 
 /* Custom scrollbars for tables and lists */
@@ -18,6 +160,9 @@
 ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 4px;
+}
+html.dark-mode ::-webkit-scrollbar-thumb {
+  background: #475569;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;

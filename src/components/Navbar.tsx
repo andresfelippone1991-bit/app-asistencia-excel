@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { ClipboardCheck, Settings, BookOpen, Plus, ShieldCheck, AlertCircle, LogOut } from 'lucide-react';
+import { ClipboardCheck, Settings, Plus, LogOut, Sun, Moon } from 'lucide-react';
 import { googleAuthService, GoogleAuthState } from '../services/googleAuthService';
 
 interface NavbarProps {
   isConfigured: boolean;
+  isDarkMode: boolean;
+  onToggleTheme: () => void;
   onOpenSettings: () => void;
   onOpenGuide: () => void;
   onNewCourse: () => void;
@@ -11,9 +13,9 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  isConfigured,
+  isDarkMode,
+  onToggleTheme,
   onOpenSettings,
-  onOpenGuide,
   onNewCourse,
   onGoogleSignIn,
 }) => {
@@ -27,11 +29,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
         {/* Logo and Brand */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-200">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
             <ClipboardCheck className="w-6 h-6" />
           </div>
           <div>
@@ -45,7 +47,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Right actions */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-2.5">
           {/* Direct Google Sign-In Button */}
           {authState.isAuthenticated ? (
             <div className="relative">
@@ -99,9 +101,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={onGoogleSignIn}
               className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-xs transition-all hover:border-slate-300"
-              title="Iniciar sesión con Google para sincronizar sin Apps Script"
+              title="Iniciar sesión con Google"
             >
-              {/* Google G icon */}
               <svg className="w-4 h-4" viewBox="0 0 24 24">
                 <path
                   fill="#4285F4"
@@ -124,10 +125,29 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
+          {/* Theme Toggle Button (Light / Dark Mode) */}
+          <button
+            onClick={onToggleTheme}
+            className="flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+            title={isDarkMode ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro'}
+          >
+            {isDarkMode ? (
+              <>
+                <Sun className="w-4 h-4 text-amber-400" />
+                <span className="hidden lg:inline">Claro</span>
+              </>
+            ) : (
+              <>
+                <Moon className="w-4 h-4 text-indigo-600" />
+                <span className="hidden lg:inline">Oscuro</span>
+              </>
+            )}
+          </button>
+
           {/* Settings button */}
           <button
             onClick={onOpenSettings}
-            className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+            className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors"
             title="Configuración"
           >
             <Settings className="w-5 h-5" />
@@ -136,7 +156,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Add Course button */}
           <button
             onClick={onNewCourse}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs sm:text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm shadow-indigo-200 transition-all hover:shadow-md"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs sm:text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm shadow-indigo-500/20 transition-all hover:shadow-md"
           >
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">Nuevo Curso</span>
