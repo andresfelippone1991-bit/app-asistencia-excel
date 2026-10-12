@@ -139,6 +139,16 @@ export function App() {
   const totalStudentsAllCourses = courses.reduce((acc, c) => acc + c.students.length, 0);
   const isConnected = authState.isAuthenticated || Boolean(settings.globalAppsScriptUrl);
 
+  const handleDirectGoogleSignIn = async () => {
+    try {
+      await googleAuthService.signIn();
+      showToast('success', '¡Cuenta de Google conectada! Ahora la asistencia se guardará automáticamente.');
+    } catch (err: any) {
+      showToast('error', err.message || 'No se pudo iniciar sesión con Google.');
+      setIsSettingsModalOpen(true);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
       {/* Toast Notifications */}
@@ -153,7 +163,7 @@ export function App() {
           setCourseToEdit(null);
           setIsCourseModalOpen(true);
         }}
-        onGoogleSignIn={() => setIsSettingsModalOpen(true)}
+        onGoogleSignIn={handleDirectGoogleSignIn}
       />
 
       {/* Main Container */}

@@ -15,9 +15,10 @@ const TOKEN_STORAGE_KEY = 'app_asistencia_google_token_v1';
 const USER_STORAGE_KEY = 'app_asistencia_google_user_v1';
 const CLIENT_ID_STORAGE_KEY = 'app_asistencia_google_client_id_v1';
 
-// Default / fallback client ID from env or local storage
+// Default / fallback client ID from env or hardcoded project client ID
 export const DEFAULT_CLIENT_ID =
-  (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || '';
+  (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID ||
+  '1036592972072-bq85jqgj5jp2nmg5b946f18bo8vhm9h9.apps.googleusercontent.com';
 
 declare global {
   interface Window {
