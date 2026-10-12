@@ -172,19 +172,55 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </button>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                      Google OAuth Client ID
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-semibold text-slate-700">
+                        Google OAuth Client ID
+                      </label>
+                      <a
+                        href="https://console.cloud.google.com/apis/credentials"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-indigo-600 hover:underline font-medium"
+                      >
+                        Abrir Google Cloud Console &rarr;
+                      </a>
+                    </div>
                     <input
                       type="text"
                       value={clientId}
                       onChange={(e) => setClientId(e.target.value)}
-                      placeholder="xxxxxxx.apps.googleusercontent.com"
+                      placeholder="123456789-xxxxxxx.apps.googleusercontent.com"
                       className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 font-mono outline-hidden bg-white"
                     />
                   </div>
+
+                  {/* Quick mini-guide */}
+                  <details className="bg-white/80 border border-indigo-100 rounded-xl p-2.5 text-[11px] text-slate-600">
+                    <summary className="font-semibold text-indigo-700 cursor-pointer select-none">
+                      ¿Cómo crear mi Client ID gratis en 2 minutos? (Ver pasos)
+                    </summary>
+                    <ol className="list-decimal list-inside space-y-1.5 mt-2 pl-1 text-slate-700">
+                      <li>
+                        Ve a <a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer" className="text-indigo-600 underline font-medium">console.cloud.google.com</a> y crea un <strong>Proyecto nuevo</strong>.
+                      </li>
+                      <li>
+                        En <strong>APIs y servicios &gt; Biblioteca</strong>, busca y habilita: <strong>Google Sheets API</strong> y <strong>Google Drive API</strong>.
+                      </li>
+                      <li>
+                        En <strong>Pantalla de consentimiento de OAuth</strong>, elige <em>Externo</em>, pon un nombre, y en <strong>Usuarios de prueba (Test users)</strong> agrega tu propio correo de Gmail.
+                      </li>
+                      <li>
+                        En <strong>Credenciales &gt; Crear credenciales &gt; ID de cliente de OAuth</strong>, elige <strong>Aplicación web</strong>.
+                      </li>
+                      <li>
+                        En <strong>Orígenes de JavaScript autorizados</strong>, agrega <code>http://localhost:5173</code> (y luego tu URL de Vercel/Netlify).
+                      </li>
+                      <li>Copia el <strong>ID de cliente</strong> generado y pégalo arriba.</li>
+                    </ol>
+                  </details>
+
                   <button
                     type="button"
                     onClick={handleGoogleSignIn}

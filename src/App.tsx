@@ -88,16 +88,6 @@ export function App() {
 
   const handleSyncCourse = async (course: Course) => {
     const effectiveAppsScriptUrl = (course.appsScriptUrl || settings.globalAppsScriptUrl).trim();
-    const isGoogleConnected = authState.isAuthenticated;
-
-    if (!effectiveAppsScriptUrl && !isGoogleConnected) {
-      showToast(
-        'error',
-        'Inicia sesión con Google o configura la URL de Apps Script en Ajustes.'
-      );
-      setIsSettingsModalOpen(true);
-      return;
-    }
 
     if (!course.spreadsheetId) {
       showToast('error', 'El curso no tiene un enlace o ID de Google Sheet configurado.');
@@ -185,28 +175,31 @@ export function App() {
         ) : (
           /* Courses Dashboard */
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-            {/* Setup Alert Banner if neither Google OAuth nor Apps Script URL is set */}
+            {/* Info Banner for Direct URL Mode */}
             {!isConnected && (
-              <div className="bg-gradient-to-r from-indigo-500/10 via-purple-500/5 to-transparent border border-indigo-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in">
+              <div className="bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent border border-emerald-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in">
                 <div className="flex items-start gap-3">
-                  <span className="p-2 bg-indigo-100 text-indigo-700 rounded-xl mt-0.5">
-                    <ShieldAlert className="w-5 h-5" />
+                  <span className="p-2 bg-emerald-100 text-emerald-700 rounded-xl mt-0.5">
+                    <CheckCircle2 className="w-5 h-5" />
                   </span>
                   <div>
-                    <h3 className="font-bold text-indigo-950 text-sm">
-                      Conecta tus Google Sheets con 1 Clic
+                    <h3 className="font-bold text-emerald-950 text-sm">
+                      ¡Modo Sin Configuración Activo! Solo pega el link de tu Google Sheet
                     </h3>
-                    <p className="text-xs text-indigo-900/80 mt-0.5 leading-relaxed">
-                      Inicia sesión con tu cuenta de Google en Ajustes para conectar cualquier planilla directamente con solo pegar su URL o elegirla de Google Drive.
+                    <p className="text-xs text-emerald-900/80 mt-0.5 leading-relaxed">
+                      En tu planilla de Google Sheets toca <strong>"Compartir" &rarr; "Cualquier persona con el enlace"</strong>, pega el link al crear tu curso y la app leerá todos tus alumnos automáticamente sin configurar nada más.
                     </p>
                   </div>
                 </div>
                 <button
-                  onClick={() => setIsSettingsModalOpen(true)}
-                  className="self-start sm:self-center flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors shrink-0"
+                  onClick={() => {
+                    setCourseToEdit(null);
+                    setIsCourseModalOpen(true);
+                  }}
+                  className="self-start sm:self-center flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors shrink-0"
                 >
-                  <span>Conectar en Ajustes</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  <Plus className="w-4 h-4" />
+                  <span>Pegar Link de mi Curso</span>
                 </button>
               </div>
             )}

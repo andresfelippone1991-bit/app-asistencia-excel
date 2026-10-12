@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Calendar, ExternalLink, RefreshCw, Send, CheckCircle2, AlertCircle, Sparkles, CheckCheck } from 'lucide-react';
+import { ArrowLeft, Calendar, ExternalLink, RefreshCw, Send, CheckCircle2, Copy, Check } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { AttendanceStatus, Course, Student } from '../types';
+import type { AttendanceStatus, Course } from '../types';
 import { StudentRow } from './StudentRow';
 import { AttendanceStats } from './AttendanceStats';
 import { getTodayInputFormat, formatAttendanceDate, getFriendlyDateLabel } from '../utils/dateFormatter';
 import { buildGoogleSheetUrl } from '../utils/sheetParser';
 import { googleSheetsService } from '../services/googleSheetsService';
+import type { SaveAttendanceResult } from '../services/googleSheetsService';
 
 interface AttendanceTakerProps {
   course: Course;
@@ -36,14 +37,14 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
   const [statusFilter, setStatusFilter] = useState<AttendanceStatus | 'all'>('all');
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [saveResult, setSaveResult] = useState<SaveAttendanceResult | null>(null);
+  const [copiedAgain, setCopiedAgain] = useState(false);
 
   const effectiveAppsScriptUrl = (course.appsScriptUrl || globalAppsScriptUrl).trim();
   const formattedDate = formatAttendanceDate(selectedDate, dateFormat);
 
   // Initialize attendance state on load or when course changes
   useEffect(() => {
-    // Check if there is an existing record for this date in course history
     const existingRecord = course.history?.find((h) => h.date === formattedDate);
 
     if (existingRecord) {
@@ -57,6 +58,7 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
       setAttendance(initial);
       setNotes({});
     }
+    setSaveResult(null);
   }, [course.id, selectedDate, formattedDate, autoMarkAllPresent]);
 
   const handleStatusChange = (studentId: string, status: AttendanceStatus) => {
@@ -101,24 +103,15 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
   };
 
   const handleSaveAttendance = async () => {
-    if (!effectiveAppsScriptUrl) {
-      showToast(
-        'error',
-        'Falta configurar la URL de Google Apps Script. Ve a Configuración para agregarla.'
-      );
-      return;
-    }
-
     if (!course.spreadsheetId) {
       showToast('error', 'Este curso no tiene una planilla de Google Sheets vinculada.');
       return;
     }
 
     setIsSaving(true);
-    setSaveSuccess(null);
+    setSaveResult(null);
 
     try {
-      // Build row-based records for Google Apps Script
       const recordsByRow: Record<string, AttendanceStatus> = {};
       course.students.forEach((s) => {
         const val = attendance[s.id] || '';
@@ -133,21 +126,20 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
         dateRow: course.dateRow || 3,
         startColumn: course.startColumn || 'C',
         records: recordsByRow,
+        students: course.students,
         overwrite: true,
       });
 
-      // Trigger celebratory confetti effect
       try {
         confetti({
           particleCount: 80,
           spread: 70,
           origin: { y: 0.7 },
         });
-      } catch (e) {
+      } catch {
         // ignore confetti errors
       }
 
-      // Update course history locally
       const updatedHistory = [...(course.history || [])];
       const existingIndex = updatedHistory.findIndex((h) => h.date === formattedDate);
       const newRecord = {
@@ -155,7 +147,7 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
         timestamp: new Date().toISOString(),
         records: attendance,
         notes: notes,
-        syncedToGoogleSheets: true,
+        syncedToGoogleSheets: res.mode !== 'direct_clipboard',
         columnUsed: res.columnLetter,
       };
 
@@ -172,29 +164,34 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
       };
 
       onAttendanceSaved(updatedCourse);
-      setSaveSuccess(`¡Guardado exitoso en columna ${res.columnLetter} de Google Sheets!`);
-      showToast(
-        'success',
-        `Asistencia del día ${formattedDate} registrada en columna ${res.columnLetter}`
-      );
+      setSaveResult(res);
+
+      if (res.mode === 'direct_clipboard') {
+        showToast(
+          'success',
+          `¡Columna del día ${formattedDate} copiada! Abre tu planilla y presiona Ctrl+V en ${res.columnLetter}${course.dateRow || 3}`
+        );
+      } else {
+        showToast(
+          'success',
+          `Asistencia del día ${formattedDate} guardada automáticamente en columna ${res.columnLetter}`
+        );
+      }
     } catch (err: any) {
-      showToast('error', `Error al guardar en Google Sheets: ${err.message}`);
+      showToast('error', `Error al guardar: ${err.message}`);
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Student filtering
   const filteredStudents = course.students.filter((st) => {
-    const matchesSearch =
-      st.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = st.name.toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchesSearch) return false;
 
     if (statusFilter === 'all') return true;
     return attendance[st.id] === statusFilter;
   });
 
-  // Calculate live statistics
   let presentCount = 0;
   let absentCount = 0;
   let lateCount = 0;
@@ -286,7 +283,6 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
             </div>
           </div>
 
-          {/* Date shortcut pills */}
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => handleQuickDateChange(0)}
@@ -304,23 +300,67 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
         </div>
       </div>
 
-      {/* Success banner if saved */}
-      {saveSuccess && (
-        <div className="mb-4 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center justify-between gap-3 text-xs animate-in fade-in">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span className="font-medium">{saveSuccess}</span>
+      {/* Save Result Banner */}
+      {saveResult && (
+        <div className="mb-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 space-y-2.5 animate-in fade-in">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <div className="text-xs">
+                <p className="font-bold text-sm text-emerald-900">
+                  {saveResult.mode === 'direct_clipboard'
+                    ? `¡Columna del día ${formattedDate} lista y copiada al portapapeles!`
+                    : `¡Guardado automático exitoso en columna ${saveResult.columnLetter}!`}
+                </p>
+                {saveResult.mode === 'direct_clipboard' ? (
+                  <p className="text-emerald-800 mt-1 leading-relaxed">
+                    Haz clic en <strong>"Abrir Planilla"</strong>, selecciona la celda{' '}
+                    <code className="bg-emerald-100 px-1.5 py-0.5 rounded font-bold">
+                      {saveResult.columnLetter}{course.dateRow || 3}
+                    </code>{' '}
+                    (donde dice <em>"Fecha"</em>) y presiona <strong>Ctrl + V</strong> (Pegar). Se completarán la fecha y los {course.students.length} alumnos en 1 segundo.
+                  </p>
+                ) : (
+                  <p className="text-emerald-800 mt-0.5">
+                    La fecha y las asistencias ya fueron escritas directamente en tu hoja de Google Sheets.
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
-          {course.spreadsheetId && (
-            <a
-              href={buildGoogleSheetUrl(course.spreadsheetId)}
-              target="_blank"
-              rel="noreferrer"
-              className="font-semibold underline flex items-center gap-1 shrink-0 text-emerald-700 hover:text-emerald-800"
-            >
-              Abrir Planilla <ExternalLink className="w-3 h-3" />
-            </a>
-          )}
+
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            {course.spreadsheetId && (
+              <a
+                href={buildGoogleSheetUrl(course.spreadsheetId)}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
+              >
+                <span>
+                  {saveResult.mode === 'direct_clipboard'
+                    ? `Abrir Planilla y Pegar en ${saveResult.columnLetter}${course.dateRow || 3}`
+                    : 'Ver Planilla en Google Sheets'}
+                </span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
+
+            {saveResult.clipboardText && (
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(saveResult.clipboardText!);
+                  setCopiedAgain(true);
+                  setTimeout(() => setCopiedAgain(false), 2000);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-semibold transition-colors"
+              >
+                {copiedAgain ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedAgain ? '¡Copiado!' : 'Volver a Copiar Columna'}</span>
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -374,7 +414,6 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
       {/* Fixed / Floating Bottom Action Bar */}
       <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200/80 p-3 sm:p-4 shadow-xl">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
-          {/* Quick summary status */}
           <div className="hidden sm:block">
             <p className="text-xs font-bold text-slate-800">
               {presentCount} presentes &bull; {absentCount} ausentes &bull; {lateCount} tardes
@@ -384,7 +423,6 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
             </p>
           </div>
 
-          {/* Big CTA Save Button */}
           <button
             onClick={handleSaveAttendance}
             disabled={isSaving || course.students.length === 0}
@@ -393,7 +431,7 @@ export const AttendanceTaker: React.FC<AttendanceTakerProps> = ({
             {isSaving ? (
               <>
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>Guardando en Google Sheets...</span>
+                <span>Procesando Asistencia...</span>
               </>
             ) : (
               <>
